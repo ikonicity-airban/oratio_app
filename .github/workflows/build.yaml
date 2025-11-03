@@ -1,118 +1,46 @@
-# .github/workflows/flutter-build.yml
-name: Build APK & IPA
+# .github/workflows/build.yml
+name: Build APK & IPA (No Signing)
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+    branches: [ '**' ]
 
 jobs:
   build:
-    runs-on: macos-15               # Apple M2 – fastest
-    timeout-minutes: 60
-
+    runs-on: macos-15
     steps:
-      # ────────────────────────── Checkout ──────────────────────────
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ────────────────────────── Java (Android) ──────────────────────────
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      # Use Flutter 3.24.3 — COMPATIBLE WITH YOUR CODE
+      - uses: subosito/flutter-action@v2
         with:
-          distribution: temurin
-          java-version: 17
-          cache: gradle
-
-      # ────────────────────────── Flutter ──────────────────────────
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: 3.27.0
+          flutter-version: 3.24.3
           channel: stable
-          cache: true
 
-      - name: Get Flutter dependencies
-        run: flutter pub get
+      - run: flutter pub get
 
-      # ────────────────────────── Android Keystore ──────────────────────────
-      - name: Decode Android Keystore
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
-          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
-          KEY_PASS: ${{ secrets.ANDROID_KEY_PASS }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        run: |
-          echo "$KEYSTORE_B64" | base64 -d > android/app/upload-keystore.jks
-          cat > android/key.properties << EOF
-          storePassword=$KEYSTORE_PASS
-          keyPassword=$KEY_PASS
-          keyAlias=$KEY_ALIAS
-          storeFile=upload-keystore.jks
-          EOF
+      # ANDROID: Build APK (No signing)
+      - run: flutter build apk --release --split-per-abi
 
-      # ────────────────────────── Build APK ──────────────────────────
-      - name: Build Android APK (split per ABI)
-        run: |
-          flutter build apk --release --split-per-abi
-
-      # ────────────────────────── iOS Setup ──────────────────────────
-      - name: Install CocoaPods
-        run: sudo gem install cocoapods -v 1.15.2
-
-      - name: Install iOS Pods
-        run: |
+      # iOS: Build IPA (Unsigned)
+      - run: |
           cd ios
-          pod install --repo-update
+          pod install
+      - run: flutter build ios --release --no-codesign
 
-      # ────────────────────────── iOS Code Signing (Automatic) ──────────────────────────
-      - name: Import Apple Certificate & Provisioning Profile
-        env:
-          APPLE_CERTIFICATE_B64: ${{ secrets.APPLE_CERTIFICATE_B64 }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          PROVISIONING_PROFILE_B64: ${{ secrets.PROVISIONING_PROFILE_B64 }}
-        run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          echo "$APPLE_CERTIFICATE_B64" | base64 -d > certificate.p12
-          echo "$PROVISIONING_PROFILE_B64" | base64 -d > profile.mobileprovision
+      - run: |
+          mkdir -p build/Payload
+          cp -r build/ios/iphoneos/Runner.app build/Payload/
+          cd build && zip -r9 oratio_app.ipa Payload
 
-          security create-keychain -p "" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "" build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-
-      # ────────────────────────── Build IPA ──────────────────────────
-      - name: Build iOS IPA
-        run: |
-          flutter build ipa --release \
-            --export-options-plist=ios/exportOptions.plist
-
-      # ────────────────────────── Upload Artifacts ──────────────────────────
-      - name: Upload APK Artifacts
-        uses: actions/upload-artifact@v4
+      # UPLOAD
+      - uses: actions/upload-artifact@v4
         with:
-          name: android-apks
-          path: |
-            build/app/outputs/flutter-apk/app-*-release.apk
-          retention-days: 7
+          name: android-apk
+          path: build/app/outputs/flutter-apk/*.apk
 
-      - name: Upload IPA Artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: ios-ipa
-          path: build/ios/ipa/*.ipa
-          retention-days: 7
-
-      # ────────────────────────── (Optional) Firebase Distribution ──────────────────────────
-      # Uncomment if you want auto-upload to Firebase
-      # - name: Firebase App Distribution (Android)
-      #   uses: wzieba/Firebase-Distribution-Github-Action@v1
-      #   with:
-      #     appId: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
-      #     token: ${{ secrets.FIREBASE_TOKEN }}
-      #     file: build/app/outputs/flutter-apk/app-release.apk
-      #     groups: testers
+          name: ios-ipa-unsigned
+          path: build/oratio_app.ipa

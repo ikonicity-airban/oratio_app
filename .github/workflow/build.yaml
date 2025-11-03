@@ -1,0 +1,56 @@
+name: Build APK & IPA (No Signing) - Release
+
+on:
+  workflow_dispatch:  # Click "Run workflow" in GitHub
+  push:
+    branches: [ '**' ]  # Works on ANY branch
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0
+          channel: stable
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      # ── ANDROID: Build APK (No signing needed) ──
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
+
+      # ── iOS: Build IPA (Unsigned) ──
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods -v 1.15.2
+          cd ios && pod install
+
+      - name: Build iOS (No Code Sign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Create IPA Manually
+        run: |
+          mkdir -p build/Payload
+          cp -r build/ios/iphoneos/Runner.app build/Payload/
+          cd build && zip -r9 FlutterApp.ipa Payload
+
+      # ── UPLOAD ARTIFACTS ──
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-unsigned
+          path: build/FlutterApp.ipa
