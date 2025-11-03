@@ -439,7 +439,7 @@ class _CreatePostPageState extends State<CreatePostPage> {
                                       fontSize: 14,
                                     ),
                                   ),
-                                  initialValue: _selectedCommunity,
+                                  value: _selectedCommunity,
                                   items: snapshot.data!
                                       .map((RecordModel community) {
                                     return DropdownMenuItem<String>(

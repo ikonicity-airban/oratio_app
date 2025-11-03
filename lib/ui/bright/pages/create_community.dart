@@ -503,7 +503,7 @@ class _PrayerCommunityCreationPageState
                           _isClosed = val;
                         });
                       },
-                      activeThumbColor: AppColors.primary,
+                      thumbColor: MaterialStatePropertyAll(AppColors.primary),
                     ),
                     const SizedBox(width: 10),
                     Expanded(

@@ -207,7 +207,7 @@ class _WithdrawalModalState extends State<WithdrawalModal> {
                 // Bank Dropdown
                 FadeInRight(
                   child: DropdownButtonFormField<String>(
-                    initialValue: _selectedBank,
+                    value: _selectedBank,
                     hint: Text(
                       'Select Bank',
                       style: TextStyle(color: Colors.deepPurple[700]),
