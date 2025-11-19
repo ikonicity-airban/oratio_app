@@ -1,0 +1,98 @@
+name: Build & Deploy iOS to App Store Connect
+
+on:
+  workflow_dispatch: # Manual trigger
+  # push:  # Uncomment for auto on main branch
+  #   branches: [main]
+
+jobs:
+  build-deploy:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0 # Update to latest stable if needed
+          channel: stable
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      # ── iOS: Setup Signing (From Earlier) ──
+      - name: Install iOS Certificate
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo $IOS_CERTIFICATE_BASE64 | base64 --decode > /tmp/certificate.p12
+          security create-keychain -p "" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/certificate.p12 -k build.keychain -P $IOS_CERTIFICATE_PASSWORD -T /usr/bin/codesign
+          security set-key-partition -f -k "" -D
+          rm /tmp/certificate.p12
+
+      - name: Install Provisioning Profile
+        env:
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          echo $IOS_PROVISIONING_PROFILE_BASE64 | base64 --decode > /tmp/profile.mobileprovision
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp /tmp/profile.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
+          rm /tmp/profile.mobileprovision
+
+      # ── iOS: Install CocoaPods ──
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          cd ios && pod install --repo-update
+
+      # ── iOS: Build Signed Bundle ──
+      - name: Build iOS (Signed Release)
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: flutter build ios --release
+
+      # ── iOS: Create Signed IPA ──
+      - name: Create Signed IPA
+        run: |
+          mkdir -p build/Payload
+          cp -r build/ios/iphoneos/Runner.app build/Payload/
+          cd build && zip -r9 Runner.ipa Payload
+
+      # ── Setup Fastlane ──
+      - name: Setup Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1" # Compatible with Fastlane
+          bundler-cache: true
+      - name: Install Fastlane
+        run: |
+          gem install fastlane -NV
+          cd ios && fastlane init  # Skips if Fastfile exists
+
+      # ── Upload to App Store Connect (TestFlight) ──
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: "" # Not needed with API key
+        run: |
+          cd ios
+          fastlane beta  # Runs your Fastfile lane; uploads Runner.ipa
+
+      # ── Optional: Upload APK/AAB (Android unchanged) ──
+      - name: Upload Android Artifacts
+        if: false # Enable if needed
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            build/app/outputs/flutter-apk/*.apk
+            build/app/outputs/bundle/release/app-release.aab
