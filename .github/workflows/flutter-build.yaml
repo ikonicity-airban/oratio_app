@@ -2,8 +2,6 @@ name: Build APK, AAB, App & IPA (No Signing)
 
 on:
   workflow_dispatch:  # Click "Run workflow" in GitHub
-  push:
-    branches: [ '**' ]  # Works on ANY branch
 
 jobs:
   build:
