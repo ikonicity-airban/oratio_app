@@ -1,4 +1,4 @@
-name: Build APK & IPA (No Signing)
+name: Build APK, AAB, App & IPA (No Signing)
 
 on:
   workflow_dispatch:  # Click "Run workflow" in GitHub
@@ -27,14 +27,25 @@ jobs:
       - name: Build APK
         run: flutter build apk --release --split-per-abi
 
+      # ── ANDROID: Build AAB (No signing needed) ──
+      - name: Build AAB
+        run: flutter build appbundle --release
+
       # ── iOS: Build IPA (Unsigned) ──
       - name: Install CocoaPods
         run: |
           sudo gem install cocoapods -v 1.15.2
           cd ios && pod install
 
-      - name: Build iOS (No Code Sign)
+      - name: Build iOS Bundle (No Code Sign)
         run: flutter build ios --release --no-codesign
+
+      # ── iOS: Upload Unsigned App Bundle (.app) ──
+      - name: Upload App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-bundle-unsigned
+          path: build/ios/iphoneos/Runner.app
 
       - name: Create IPA Manually
         run: |
@@ -48,6 +59,12 @@ jobs:
         with:
           name: android-apk
           path: build/app/outputs/flutter-apk/*.apk
+
+      - name: Upload AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
