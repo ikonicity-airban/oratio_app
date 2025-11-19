@@ -19,17 +19,17 @@ jobs:
           channel: stable
 
       - name: Get Dependencies
-        run:
-          flutter pub get
+        run: flutter pub get
 
-          # ── iOS: Build IPA (Unsigned) ──  # (Remove or comment out if not needed elsewhere)
+      # ── iOS: Setup CocoaPods ──
       - name: Install CocoaPods
         run: |
           sudo gem install cocoapods -v 1.15.2
           cd ios && pod install
 
+      # ── iOS: Build Simulator Bundle (Profile Mode) ──
       - name: Build iOS Simulator Bundle (No Signing Needed)
-        run: flutter build ios --release --simulator
+        run: flutter build ios --simulator --profile --target-platform=ios-arm64-simulator
 
       # ── iOS: Upload Simulator App Bundle (.app) for Appetize ──
       - name: Upload App Bundle
