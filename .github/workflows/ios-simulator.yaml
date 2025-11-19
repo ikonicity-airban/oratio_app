@@ -1,0 +1,39 @@
+name: Build .app (For Appetize)
+
+on:
+  workflow_dispatch: # Click "Run workflow" in GitHub
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.27.0
+          channel: stable
+
+      - name: Get Dependencies
+        run:
+          flutter pub get
+
+          # ── iOS: Build IPA (Unsigned) ──  # (Remove or comment out if not needed elsewhere)
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods -v 1.15.2
+          cd ios && pod install
+
+      - name: Build iOS Simulator Bundle (No Signing Needed)
+        run: flutter build ios --release --simulator
+
+      # ── iOS: Upload Simulator App Bundle (.app) for Appetize ──
+      - name: Upload App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app-bundle-simulator
+          path: build/ios/iphonesimulator/Runner.app
