@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
@@ -24,16 +24,24 @@ jobs:
       # ── iOS: Setup CocoaPods ──
       - name: Install CocoaPods
         run: |
-          sudo gem install cocoapods
-          cd ios && pod install --repo-update
+          sudo gem install cocoapods -v 1.15.2
+          cd ios && pod install
 
       # ── iOS: Build Simulator Bundle (Debug Mode) ──
       - name: Build iOS Simulator Bundle (No Signing Needed)
         run: flutter build ios --simulator
 
-      # ── Upload .app Bundle Directly (Zipped with .app at Root) ──
-      - name: Upload App Bundle for Appetize
+      # ── iOS: Create Wrapped ZIP (Runner.app at Root) ──
+      - name: Zip App Bundle for Appetize
+        run: |
+          cd build/ios/iphonesimulator
+          zip -r appetize.zip Runner.app
+          # Log structure for verification
+          unzip -l appetize.zip
+
+      # ── iOS: Upload Wrapped ZIP (.app at Root) for Appetize ──
+      - name: Upload App Bundle
         uses: actions/upload-artifact@v4
         with:
-          name: ios-runner-app-simulator
-          path: build/ios/iphonesimulator/Runner.app
+          name: ios-app-bundle-simulator
+          path: build/ios/iphonesimulator/appetize.zip
